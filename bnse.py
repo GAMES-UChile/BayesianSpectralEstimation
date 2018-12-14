@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.optimize import minimize
+from scipy.signal import find_peaks
 #import scipy.signal as sp
 #sns.set_style("whitegrid")
 #import scipy.signal as sp
@@ -153,7 +154,7 @@ class bse:
         plt.xlim([min(self.w),max(self.w)])
         plt.tight_layout()
 
-    def plot_power_spectral_density(self, how_many):
+    def plot_power_spectral_density(self, how_many, flag=None):
         #posterior moments for frequency
         plt.figure(figsize=(18,6))
         freqs = len(self.w)
@@ -166,6 +167,9 @@ class bse:
         plt.plot(self.w,samples[:,0], color='red', alpha=0.35, label='posterior samples')
         posterior_mean_psd = self.post_mean_r**2 + self.post_mean_i**2 + np.diag(self.post_cov_r + self.post_cov_r)
         plt.plot(self.w,posterior_mean_psd, color='black', label = '(analytical) posterior mean')
+        if flag == 'show peaks':
+            peaks, _  = find_peaks(posterior_mean_psd, prominence=500000)
+            plt.stem(self.w[peaks],posterior_mean_psd[peaks], markerfmt='ko', label='peaks')
         plt.title('Sample posterior power spectral density')
         plt.xlabel('frequency')
         plt.legend()
@@ -175,6 +179,9 @@ class bse:
     def set_labels(self, time_label, signal_label):
         self.time_label = time_label
         self.signal_label = signal_label
+
+    def set_freqspace(self, max_freq, dimension=500):
+        self.w = np.linspace(0, max_freq, dimension)
 
 
 def outersum(a,b):
