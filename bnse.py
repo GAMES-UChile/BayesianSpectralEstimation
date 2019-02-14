@@ -32,7 +32,7 @@ class bse:
         self.theta = 0.01
         self.sigma_n = np.std(self.y)/10
         self.time = np.linspace(np.min(self.x), np.max(self.x), 500)
-        self.w = np.linspace(0, self.Nx/(np.max(self.x)-np.min(self.x))/4, 500)
+        self.w = np.linspace(0, self.Nx/(np.max(self.x)-np.min(self.x))/16, 500)
         self.post_mean = None
         self.post_cov = None
         self.post_mean_r = None
