@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.optimize import minimize
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, peak_widths
 #import scipy.signal as sp
 #sns.set_style("whitegrid")
 #import scipy.signal as sp
@@ -169,12 +169,15 @@ class bse:
         plt.plot(self.w,posterior_mean_psd, color='black', label = '(analytical) posterior mean')
         if flag == 'show peaks':
             peaks, _  = find_peaks(posterior_mean_psd, prominence=500000)
+            widths = peak_widths(posterior_mean_psd, peaks, rel_height=0.5)
             plt.stem(self.w[peaks],posterior_mean_psd[peaks], markerfmt='ko', label='peaks')
         plt.title('Sample posterior power spectral density')
         plt.xlabel('frequency')
         plt.legend()
         plt.xlim([min(self.w),max(self.w)])
         plt.tight_layout()
+        if flag == 'show peaks':
+            return peaks, widths
 
     def set_labels(self, time_label, signal_label):
         self.time_label = time_label
