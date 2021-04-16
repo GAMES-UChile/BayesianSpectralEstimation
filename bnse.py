@@ -21,10 +21,34 @@ class bse:
     # Class Attribute none yet
 
     # Initializer / Instance Attributes
-    def __init__(self, space_input, space_output):
-        self.offset = np.median(space_input)
-        self.x = space_input - self.offset
-        self.y = space_output
+    def __init__(self, space_input=None, space_output=None, aim=None):
+
+        if aim is None:
+            self.offset = np.median(space_input)
+            self.x = space_input - self.offset
+            self.y = space_output
+            self.post_mean = None
+            self.post_cov = None
+            self.post_mean_r = None
+            self.post_cov_r = None
+            self.post_mean_i = None
+            self.post_cov_i = None
+            self.time_label = None
+            self.signal_label = None
+            self.initialise_params()
+        elif aim == 'sampling':
+            self.sigma = 1
+            self.gamma = 1/2
+            self.theta = 0
+            self.sigma_n = 0
+        elif aim == 'regression':
+            self.x = space_input
+            self.y = space_output
+            self.Nx = len(self.x)
+
+            
+
+    def initialise_params(self):
         self.Nx = len(self.x)
         self.alpha = 1/2/((np.max(self.x)-np.min(self.x))/2)**2
         self.sigma = np.std(self.y)
@@ -33,14 +57,8 @@ class bse:
         self.sigma_n = np.std(self.y)/10
         self.time = np.linspace(np.min(self.x), np.max(self.x), 500)
         self.w = np.linspace(0, self.Nx/(np.max(self.x)-np.min(self.x))/16, 500)
-        self.post_mean = None
-        self.post_cov = None
-        self.post_mean_r = None
-        self.post_cov_r = None
-        self.post_mean_i = None
-        self.post_cov_i = None
-        self.time_label = None
-        self.signal_label = None
+
+
 
     def neg_log_likelihood(self):        
         Y = self.y
@@ -98,6 +116,57 @@ class bse:
         print(f'theta ={self.theta}')
         print(f'sigma_n ={self.sigma_n}')
 
+    def sample(self, space_input=None):
+
+        if space_input is None: 
+            self.Nx = 100
+            self.x = np.random.random(self.Nx)
+        elif np.size(space_input) == 1: 
+            self.Nx = space_input
+            self.x = np.random.random(self.Nx)
+        else:
+            self.x = space_input
+            self.Nx = len(space_input)
+        self.x = np.sort(self.x)
+        cov_space = Spec_Mix(self.x,self.x,self.gamma,self.theta,self.sigma) + self.sigma_n**2*np.eye(self.Nx)
+        self.y =  np.random.multivariate_normal(np.zeros_like(self.x), cov_space)
+
+        return self.y
+
+    def acf(self,instruction):
+        times = outersum(self.x,-self.x)
+        corrs = np.outer(self.y,self.y)
+        times = np.reshape(times, self.Nx**2)
+        corrs = np.reshape(corrs, self.Nx**2)
+
+        #aggregate for common lags
+        t_unique = np.unique(times)
+        #common_times = t_unique[:, np.newaxis] == times[:, np.newaxis].T
+        common_times = np.isclose(t_unique[:, np.newaxis], times[:, np.newaxis].T)
+        corrs_unique = np.dot(common_times,corrs)
+
+
+
+        if instruction == 'plot.':
+            plt.plot(t_unique, corrs_unique,'.')
+        if instruction == 'plot-':
+            plt.plot(t_unique, corrs_unique)
+
+        return t_unique, corrs_unique
+
+
+
+
+
+    def compute_moments_time(self):
+        #posterior moments for time
+        cov_space = Spec_Mix(self.x,self.x,self.gamma,self.theta,self.sigma) + 1e-5*np.eye(self.Nx) + self.sigma_n**2*np.eye(self.Nx)
+        cov_time = Spec_Mix(self.time,self.time, self.gamma, self.theta, self.sigma)
+        cov_star = Spec_Mix(self.time,self.x, self.gamma, self.theta, self.sigma)
+        self.post_mean = np.squeeze(cov_star@np.linalg.solve(cov_space,self.y))
+        self.post_cov = cov_time - (cov_star@np.linalg.solve(cov_space,cov_star.T))
+
+
     def compute_moments(self):
         #posterior moments for time
         cov_space = Spec_Mix(self.x,self.x,self.gamma,self.theta,self.sigma) + 1e-5*np.eye(self.Nx) + self.sigma_n**2*np.eye(self.Nx)
@@ -105,7 +174,7 @@ class bse:
         cov_star = Spec_Mix(self.time,self.x, self.gamma, self.theta, self.sigma)
         self.post_mean = np.squeeze(cov_star@np.linalg.solve(cov_space,self.y))
         self.post_cov = cov_time - (cov_star@np.linalg.solve(cov_space,cov_star.T))
-        
+    
         #posterior moment for frequency
         cov_real, cov_imag = freq_covariances(self.w,self.w,self.alpha,self.gamma,self.theta,self.sigma, kernel = 'sm')
         xcov_real, xcov_imag = time_freq_covariances(self.w, self.x, self.alpha,self.gamma,self.theta,self.sigma, kernel = 'sm')
@@ -118,7 +187,7 @@ class bse:
     def plot_time_posterior(self, flag=None):
         #posterior moments for time
         plt.figure(figsize=(18,6))
-        plt.plot(self.x,self.y,'.r', label='observations')
+        plt.plot(self.x,self.y,'.r', markersize=10, label='observations')
         plt.plot(self.time,self.post_mean, color='blue', label='posterior mean')
         error_bars = 2 * np.sqrt(np.diag(self.post_cov))
         plt.fill_between(self.time, self.post_mean - error_bars, self.post_mean + error_bars, color='blue',alpha=0.1, label='95% error bars')
@@ -131,8 +200,8 @@ class bse:
         plt.xlim([min(self.x),max(self.x)])
         plt.tight_layout()
 
-    def plot_freq_posterior(self):
-        #posterior moments for frequency
+
+    def plot_freq_posterior_real(self):
         plt.figure(figsize=(18,6))
         plt.plot(self.w,self.post_mean_r, color='blue', label='posterior mean')
         error_bars = 2 * np.sqrt((np.diag(self.post_cov_r)))
@@ -143,7 +212,7 @@ class bse:
         plt.xlim([min(self.w),max(self.w)])
         plt.tight_layout()
 
-
+    def plot_freq_posterior_imag(self):
         plt.figure(figsize=(18,6))
         plt.plot(self.w,self.post_mean_i, color='blue', label='posterior mean')
         error_bars = 2 * np.sqrt((np.diag(self.post_cov_i)))
@@ -153,6 +222,10 @@ class bse:
         plt.legend()
         plt.xlim([min(self.w),max(self.w)])
         plt.tight_layout()
+
+    def plot_freq_posterior(self):
+        self.plot_freq_posterior_real()
+        self.plot_freq_posterior_imag()
 
     def plot_power_spectral_density(self, how_many, flag=None):
         #posterior moments for frequency
