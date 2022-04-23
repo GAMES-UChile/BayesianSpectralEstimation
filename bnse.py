@@ -154,10 +154,6 @@ class bse:
 
         return t_unique, corrs_unique
 
-
-
-
-
     def compute_moments_time(self):
         #posterior moments for time
         cov_space = Spec_Mix(self.x,self.x,self.gamma,self.theta,self.sigma) + 1e-5*np.eye(self.Nx) + self.sigma_n**2*np.eye(self.Nx)
@@ -182,7 +178,13 @@ class bse:
         self.post_cov_r = cov_real - (xcov_real@np.linalg.solve(cov_space,xcov_real.T))
         self.post_mean_i = np.squeeze(xcov_imag@np.linalg.solve(cov_space,self.y))
         self.post_cov_i = cov_imag - (xcov_imag@np.linalg.solve(cov_space,xcov_imag.T))
+        self.post_cov_ri = - ((xcov_real@np.linalg.solve(cov_space,xcov_imag.T)))
+        
+        self.post_mean_F = np.concatenate((self.post_mean_r, self.post_mean_i)) 
+        self.post_cov_F = np.vstack((np.hstack((self.post_cov_r,self.post_cov_ri)), np.hstack((self.post_cov_ri.T,self.post_cov_i)))) 
+        
         return cov_real, xcov_real, cov_space
+    
 
     def plot_time_posterior(self, flag=None):
         #posterior moments for time
@@ -227,7 +229,7 @@ class bse:
         self.plot_freq_posterior_real()
         self.plot_freq_posterior_imag()
 
-    def plot_power_spectral_density(self, how_many, flag=None):
+    def plot_power_spectral_density_old(self, how_many, flag=None):
         #posterior moments for frequency
         plt.figure(figsize=(18,6))
         freqs = len(self.w)
@@ -238,7 +240,32 @@ class bse:
             samples[:,i] = sample_r**2 + sample_i**2
         plt.plot(self.w,samples, color='red', alpha=0.35)
         plt.plot(self.w,samples[:,0], color='red', alpha=0.35, label='posterior samples')
-        posterior_mean_psd = self.post_mean_r**2 + self.post_mean_i**2 + np.diag(self.post_cov_r + self.post_cov_r)
+        posterior_mean_psd = self.post_mean_r**2 + self.post_mean_i**2 + np.diag(self.post_cov_r + self.post_cov_i)
+        plt.plot(self.w,posterior_mean_psd, color='black', label = '(analytical) posterior mean')
+        if flag == 'show peaks':
+            peaks, _  = find_peaks(posterior_mean_psd, prominence=500000)
+            widths = peak_widths(posterior_mean_psd, peaks, rel_height=0.5)
+            plt.stem(self.w[peaks],posterior_mean_psd[peaks], markerfmt='ko', label='peaks')
+        plt.title('Sample posterior power spectral density')
+        plt.xlabel('frequency')
+        plt.legend()
+        plt.xlim([min(self.w),max(self.w)])
+        plt.tight_layout()
+        if flag == 'show peaks':
+            return peaks, widths
+        
+        
+    def plot_power_spectral_density(self, how_many, flag=None):
+        #posterior moments for frequency
+        plt.figure(figsize=(18,6))
+        freqs = len(self.w)
+        samples = np.zeros((freqs,how_many))
+        for i in range(how_many):               
+            sample = np.random.multivariate_normal(self.post_mean_F,(self.post_cov_F+self.post_cov_F.T)/2 + 1e-5*np.eye(2*freqs))
+            samples[:,i] = sample[0:freqs]**2 + sample[freqs:]**2
+        plt.plot(self.w,samples, color='red', alpha=0.35)
+        plt.plot(self.w,samples[:,0], color='red', alpha=0.35, label='posterior samples')
+        posterior_mean_psd = self.post_mean_r**2 + self.post_mean_i**2 + np.diag(self.post_cov_r + self.post_cov_i)
         plt.plot(self.w,posterior_mean_psd, color='black', label = '(analytical) posterior mean')
         if flag == 'show peaks':
             peaks, _  = find_peaks(posterior_mean_psd, prominence=500000)
